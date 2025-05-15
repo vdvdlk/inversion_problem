@@ -22,7 +22,8 @@ def compile_f90(
         raise FileNotFoundError(f"Arquivo {f90_path} não encontrado.")
 
     compile_command = [
-        "ifort",
+        # "ifort",
+        "ifx",
         # "-diag-disable=10448",
         "-qmkl",
         f"{program_name}.f90",
@@ -291,10 +292,10 @@ def submit_ca_jobs(
     n_disorder: int = 1000,
     distkind: int = 2,
 ) -> None:
-    compile_f90(
-        source_dir=source_dir,
-        program_name=program_name,
-    )
+    # compile_f90(
+    #     source_dir=source_dir,
+    #     program_name=program_name,
+    # )
     for delta_u in delta_u_list:
         for gam in gam_list:
             jobname = f"W{delta_u:.1f}g{gam:.2f}".replace(".", "")
@@ -323,17 +324,17 @@ if __name__ == "__main__":
     SOURCE_DIR = DIR / "Sources"
     PROGRAM_NAME = "chainv031new"
 
-    JULIAN_SIGMAS = [
-        # 0.1,
-        # 0.2,
+    CA_SIGMAS = [
+        0.1,
+        0.2,
         0.3,
-        # 0.4,
-        # 0.5,
-        # 0.6,
-        # 0.7,
-        # 0.8,
+        0.4,
+        0.5,  # 4
+        0.6,
+        0.7,
+        0.8,
     ]
-    JULIAN_GAMMAS = [
+    CA_GAMMAS = [
         0.01,
         0.02,
         0.04,
@@ -342,11 +343,11 @@ if __name__ == "__main__":
         0.10,
         0.12,
         0.14,
-        0.15,
+        0.15,  # 8
         0.16,
         0.20,
         0.24,
-        0.26,
+        0.26,  # 12
         0.28,
         0.30,
     ]
@@ -403,20 +404,11 @@ if __name__ == "__main__":
     #         )
 
     submit_ca_jobs(
-        data_dir=DIR / "data_anderson_ca_L200_2",
+        data_dir=DIR / "data_anderson_ca_L200_W050",
         source_dir=SOURCE_DIR,
         program_name=PROGRAM_NAME,
         cpus=8,
         l_x=200,
-        delta_u_list=[0.5],
-        gam_list=JULIAN_GAMMAS[7:],
+        delta_u_list=CA_SIGMAS[4:5],
+        gam_list=CA_GAMMAS[12:13],
     )
-    # submit_ca_jobs(
-    #     data_dir=DIR / "data_anderson_ca_L200_2",
-    #     source_dir=SOURCE_DIR,
-    #     program_name=PROGRAM_NAME,
-    #     cpus=8,
-    #     l_x=200,
-    #     delta_u_list=[0.5],
-    #     gam_list=JULIAN_GAMMAS[7:],
-    # )

@@ -1,11 +1,10 @@
 from pathlib import Path
 
-import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
-from analysis_functions import chi_array, load_arrays
 from matplotlib.axes import Axes
 from numpy.typing import NDArray
+from scipy.integrate import simpson, trapezoid
 
 # from matplotlib.figure import Figure
 
@@ -19,10 +18,87 @@ plt.rcParams.update(
     }
 )
 
-white_on_black_args = [
-    path_effects.Stroke(linewidth=2, foreground="black"),
-    path_effects.Normal(),
-]
+
+def new_shape_arrays(
+    ca_array: NDArray,
+    input_array: NDArray,
+):
+    """Retorna novos arrays de CA e de input com o mesmo shape"""
+    ca_shape = ca_array.shape
+    input_shape = input_array.shape
+
+    new_ca_array = np.expand_dims(a=ca_array, axis=(0, -2))
+    new_ca_array = np.repeat(
+        a=new_ca_array,
+        repeats=input_shape[0],
+        axis=0,
+    )
+    new_ca_array = np.repeat(
+        a=new_ca_array,
+        repeats=input_shape[1],
+        axis=-2,
+    )
+
+    new_input_array = np.expand_dims(a=input_array, axis=(1, -3))
+    new_input_array = np.repeat(
+        a=new_input_array,
+        repeats=ca_shape[0],
+        axis=1,
+    )
+    new_input_array = np.repeat(
+        a=new_input_array,
+        repeats=ca_shape[1],
+        axis=-3,
+    )
+
+    # print(f"{ca_shape=}")
+    # print(f"{input_shape=}")
+    # print(f"{new_ca_array.shape=}")
+    # print(f"{new_input_array.shape=}")
+
+    return new_ca_array, new_input_array
+
+
+def chi_array(
+    energies: NDArray[np.float_],
+    input_gamma: NDArray[np.float_],
+    ca_gamma: NDArray[np.float_],
+    e_menos: float,
+    e_mais: float,
+    # axis: int = -1,
+    method: str = "trapezoid",
+) -> NDArray[np.float_]:
+    mask = (energies >= e_menos) & (energies <= e_mais)
+
+    new_ca_gamma, new_input_gamma = new_shape_arrays(
+        ca_array=ca_gamma,
+        input_array=input_gamma,
+    )
+    integrand = (new_input_gamma - new_ca_gamma) ** 2
+
+    # aplica máscara no último eixo (energias)
+    integrand_masked = np.compress(mask, integrand, axis=-1)
+    energies_masked = energies[mask]
+
+    if method == "trapezoid":
+        integral = trapezoid(
+            x=energies_masked,
+            y=integrand_masked,
+            axis=-1,
+        )
+    elif method == "simpson":
+        integral = simpson(
+            x=energies_masked,
+            y=integrand_masked,
+            axis=-1,
+        )
+    elif method == "sum":
+        delta_e = np.diff(energies_masked)[0]  # assume espaçamento uniforme
+        integral = np.sum(integrand_masked, axis=-1) * delta_e
+    else:
+        raise ValueError(f"Unknown integration method: {method}")
+
+    return integral
 
 
 def countour_plot(
@@ -63,7 +139,7 @@ def countour_plot(
 
     cbar = fig.colorbar(mappable=contour, ax=ax, label=cbar_label)
     cbar.set_ticks(ticks=ticks)
-    cbar.set_ticklabels([f"{tick:.3f}" for tick in ticks])
+    cbar.set_ticklabels([f"{tick:.2f}" for tick in ticks])
 
     ax.text(
         # x=0.05,
@@ -311,41 +387,29 @@ def separate_inset_plots(
 
 if __name__ == "__main__":
     DIR = Path(__file__).parent
-    ARRAY_DIR = DIR / "arrays"
-    FIG_DIR = DIR.parent / "Figures" / "Anderson"
-    # FIG_DIR.mkdir(parents=True, exist_ok=True)
-    # print(f"{FIG_DIR=}")
+    ARRAY_DIR = DIR / "arrays" / "anderson"
+    FIG_DIR = DIR / "figures" / "anderson"
 
-    CA_DATA_ARRAYS_L100 = np.load(
+    CA_DATA_ARRAYS = np.load(
         file=ARRAY_DIR / "dados_IP.npz",
     )
-    ENERGIES: NDArray[np.float_] = CA_DATA_ARRAYS_L100["energies"]
+    ENERGIES: NDArray[np.float_] = CA_DATA_ARRAYS["energies"]
 
-    BARE_TTS_L100: NDArray[np.float_] = CA_DATA_ARRAYS_L100["tts"]
-    BARE_LOGTT_L100: NDArray[np.float_] = np.log10(BARE_TTS_L100)
-    CA_LOGTT_L100: NDArray[np.float_] = np.mean(BARE_LOGTT_L100, axis=-1)
+    BARE_TTS: NDArray[np.float_] = CA_DATA_ARRAYS["tts"]
+    BARE_LOGTT: NDArray[np.float_] = np.log10(BARE_TTS)
+    CA_LOGTT: NDArray[np.float_] = np.mean(BARE_LOGTT, axis=-1)
 
-    CA_SIGMAS: NDArray[np.float_] = CA_DATA_ARRAYS_L100["sigmas"]
-    CA_GAMMAS: NDArray[np.float_] = CA_DATA_ARRAYS_L100["gammas"]
-
-    ENERGIES, CA_SIGMAS, CA_GAMMAS, CA_LOGTT_L100 = load_arrays(
-        array_filepath=ARRAY_DIR / "dados_IP.npz",
-        data_type="ca",
-    )
+    CA_SIGMAS: NDArray[np.float_] = CA_DATA_ARRAYS["sigmas"]
+    CA_GAMMAS: NDArray[np.float_] = CA_DATA_ARRAYS["gammas"]
 
     INPUT_DATA_ARRAYS = np.load(
         file=ARRAY_DIR / "data_anderson_L100.npz",
     )
-    INPUT_TT_L100: NDArray[np.float_] = INPUT_DATA_ARRAYS["tts"]
-    INPUT_LOGTT_L100: NDArray[np.float_] = np.log10(INPUT_TT_L100)
+    INPUT_TT: NDArray[np.float_] = INPUT_DATA_ARRAYS["tts"]
+    INPUT_LOGTT: NDArray[np.float_] = np.log10(INPUT_TT)
 
     INPUT_SIGMAS = INPUT_DATA_ARRAYS["sigmas"]
     INPUT_GAMMAS = INPUT_DATA_ARRAYS["gammas"]
-
-    # _, INPUT_SIGMAS, INPUT_GAMMAS, INPUT_LOGTT_L100 = load_arrays(
-    #     array_filepath=ARRAY_DIR / "data_anderson_L100.npz",
-    #     data_type="input",
-    # )
 
     intervals = [
         (-2.0, 2.0),
@@ -361,8 +425,8 @@ if __name__ == "__main__":
 
         chis = chi_array(
             energies=ENERGIES,
-            input_gamma=INPUT_LOGTT_L100,
-            ca_gamma=CA_LOGTT_L100,
+            input_gamma=INPUT_LOGTT,
+            ca_gamma=CA_LOGTT,
             e_menos=e_menos,
             e_mais=e_mais,
             # method="simpson",
@@ -370,26 +434,27 @@ if __name__ == "__main__":
         n = chis.shape[-1]
         avg_chis = np.mean(chis, axis=-1)
         var_chis = np.var(chis, axis=-1, ddof=1)
-        sdom_chi = np.sqrt(var_chis / n)
+        # sdom_chi = np.sqrt(var_chis / n)
 
-        chi_fig_2b, _ = separate_inset_plots(
-            x_1=CA_GAMMAS[0, :],
-            y_1=avg_chis[2, 4, :],
-            yerr_1=sdom_chi[2, 4, :],
-            x_vline_1=INPUT_GAMMAS[2],
-            x_2=CA_SIGMAS[:, 0],
-            y_2=avg_chis[2, :, 8],
-            yerr_2=sdom_chi[2, :, 8],
-            x_vline_2=INPUT_SIGMAS[2],
-            x_1_label=r"$\gamma$",
-            x_2_label=r"$W$",
-            ylabel=r"$\overline{\chi}$",
+        var_fig, _ = countour_plot(
+            x=CA_GAMMAS,
+            y=CA_SIGMAS,
+            z=var_chis[2, :, :],
+            # ax_title=r"$ \log \mathrm{TT}$",
+            ax_title="",
+            xlabel=r"$\gamma$",
+            ylabel=r"$W$",
+            y_hline=INPUT_SIGMAS[2],
+            x_vline=INPUT_GAMMAS[2],
+            cbar_label=r"$\mathrm{Var} [\chi]$",
+            description=rf"${e_menos} < E < {e_mais}$",
         )
-        # chi_fig_2b.savefig(
-        #     fname=energy_dir / "chi_Ldep_W050_gamma_015.pdf",
-        #     transparent=True,
-        #     bbox_inches="tight",
-        # )
+        var_fig.savefig(
+            fname=energy_dir / "chivar_W050_gamma_015.pdf",
+            transparent=True,
+            bbox_inches="tight",
+        )
 
-        plt.show()
         plt.close("all")
+
+        # plt.show()
