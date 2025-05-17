@@ -16,7 +16,7 @@ def parse_val(v):
         return v
 
 
-def read_variables(
+def read_anderson_variables(
     dados_dat_path: Path,
 ) -> dict[str, float]:
     with open(dados_dat_path, "r") as f:
@@ -42,13 +42,10 @@ def read_variables(
     texto = texto.replace(" tlD=", "\ntl_d=")
     texto = texto.replace(" muD=", "\nmu_s=", 1)
     texto = texto.replace(" muD=", "\nmu_d=")
-    # print(texto)
 
     matches = re.findall(r"([\w_]+)=\s*([^\s]+)", texto)
-    # print(matches)
 
     variables = {k: parse_val(v) for k, v in matches}
-    # print(variables)
 
     return variables
 
@@ -61,7 +58,7 @@ def get_highest_jobid_dir(job_dir: Path) -> Optional[Path]:
     return max(jobid_dirs, key=lambda d: int(d.name))
 
 
-def clean_jobid_dir(job_dir: Path):
+def copy_jobid_dir(job_dir: Path, clean_jobid_dir: bool = False):
     """Copia arquivos do maior jobid para o outname_dir."""
     jobid_dir = get_highest_jobid_dir(job_dir)
 
@@ -72,10 +69,13 @@ def clean_jobid_dir(job_dir: Path):
                 shutil.copy2(file, job_dir)
 
         # Se quiser apagar o jobid_dir depois de copiar:
-        # shutil.rmtree(jobid_dir)
+        if clean_jobid_dir:
+            shutil.rmtree(jobid_dir)
 
 
-def read_job_dir(job_dir: Path):
+def read_job_dir(
+    job_dir: Path,
+):
     # ) -> (NDArray[np.float_], dict[str, float]):
     """
     Lê os arquivos de dados de um diretório job e retorna um array numpy
@@ -87,12 +87,12 @@ def read_job_dir(job_dir: Path):
 
     dados_files = list(job_dir.glob("dados*"))
     if len(dados_files) == 0:
-        raise FileNotFoundError("Nenhum arquivo 'dados*' encontrado.")
+        raise FileNotFoundError(f"Nenhum arquivo 'dados*' encontrado em: {job_dir}")
     elif len(dados_files) > 1:
         raise RuntimeError(
             f"Esperado apenas um arquivo 'dados*' no diretório, mas {len(dados_files)} foram encontrados: {dados_files}"
         )
-    variables = read_variables(dados_files[0])
+    variables = read_anderson_variables(dados_files[0])
 
     bare_data_files = list(job_dir.glob("bareTTlogTT*.dat"))
     if len(bare_data_files) == 0:
@@ -133,7 +133,7 @@ def bare_data_to_array(
     return np.stack(splitted_arrays, axis=0)
 
 
-def compressed_to_ca_arrays(zip_path: Path, clean_jobid: bool = False):
+def compressed_to_ca_arrays(zip_path: Path, copy_from_jobid: bool = False):
     """Converts a zip file to an array"""
     # Cria um diretório temporário
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -176,8 +176,8 @@ def compressed_to_ca_arrays(zip_path: Path, clean_jobid: bool = False):
                 if not gam_sig_dir.is_dir():
                     continue
 
-                if clean_jobid:
-                    clean_jobid_dir(job_dir=gam_sig_dir)
+                if copy_from_jobid:
+                    copy_jobid_dir(job_dir=gam_sig_dir)
 
                 bare_energies, bare_tt, variables = read_job_dir(
                     job_dir=gam_sig_dir,
@@ -217,6 +217,26 @@ def compressed_to_ca_arrays(zip_path: Path, clean_jobid: bool = False):
     return energies, tts, sigmas, gammas
 
 
+def save_ca_arrays(
+    zip_path: Path,
+    array_path: Path,
+    copy_from_jobid: bool = False,
+):
+    energies, tts, sigmas, gammas = compressed_to_ca_arrays(
+        zip_path=zip_path,
+        copy_from_jobid=copy_from_jobid,
+    )
+    print("Salvando array")
+    np.savez_compressed(
+        file=array_path,
+        energies=energies[0, 0, :, 0],
+        tts=tts,
+        sigmas=sigmas[:, 0],
+        gammas=gammas[0, :],
+    )
+    print(f"Array salvo em {array_path}\n")
+
+
 def organize_versions(data_dir: Path):
     """Move diretórios *vNNN para dentro de um diretório de mesmo prefixo."""
     desc = "Organizando versões"
@@ -241,7 +261,7 @@ def organize_versions(data_dir: Path):
         shutil.move(str(dirpath), str(target_dir / name))
 
 
-def tar_xz_to_input_arrays(
+def compressed_to_input_arrays(
     tar_path: Path,
 ):
     """Converts a zip file to an array"""
@@ -283,7 +303,7 @@ def tar_xz_to_input_arrays(
             for v_dir in sorted(outname_dir.iterdir()):
                 if not v_dir.is_dir():
                     continue
-                clean_jobid_dir(v_dir)
+                copy_jobid_dir(v_dir)
 
                 bare_energies, bare_tt, variables = read_job_dir(
                     job_dir=v_dir,
@@ -304,6 +324,22 @@ def tar_xz_to_input_arrays(
     return energies, tts, sigmas, gammas
 
 
+def save_input_arrays(
+    tar_path: Path,
+    array_path: Path,
+):
+    energies, tts, sigmas, gammas = compressed_to_input_arrays(tar_path=tar_path)
+    print("Salvando array")
+    np.savez_compressed(
+        file=array_path,
+        energies=energies[0, 0, :],
+        tts=tts,
+        sigmas=sigmas,
+        gammas=gammas,
+    )
+    print(f"Array salvo em {array_path}\n")
+
+
 if __name__ == "__main__":
     DIR = Path(__file__).parent
 
@@ -311,59 +347,28 @@ if __name__ == "__main__":
     AND_ARRAY_DIR = DIR / "arrays" / "anderson"
     AND_ARRAY_DIR.mkdir(exist_ok=True, parents=True)
 
-    ca_energies, ca_tts, ca_sigmas, ca_gammas = compressed_to_ca_arrays(
-        zip_path=DIR / AND_COMP_DIR / "dados_IP.zip",
+    # L = 100
+    save_ca_arrays(
+        zip_path=AND_COMP_DIR / "dados_IP.zip",
+        array_path=AND_ARRAY_DIR / "dados_IP.npz",
     )
-    np.savez_compressed(
-        file=AND_ARRAY_DIR / "dados_IP.npz",
-        energies=ca_energies[0, 0, :, 0],
-        tts=ca_tts,
-        sigmas=ca_sigmas[:, 0],
-        gammas=ca_gammas[0, :],
-    )
-
-    input_energies, input_tts, input_sigmas, input_gammas = tar_xz_to_input_arrays(
-        tar_path=DIR / AND_COMP_DIR / "data_anderson_L100.tar.xz",
-    )
-    np.savez_compressed(
-        file=AND_ARRAY_DIR / "data_anderson_L100.npz",
-        energies=input_energies[0, 0, :],
-        tts=input_tts,
-        sigmas=input_sigmas,
-        gammas=input_gammas,
+    save_input_arrays(
+        tar_path=AND_COMP_DIR / "data_anderson_L100.tar.xz",
+        array_path=AND_ARRAY_DIR / "data_anderson_L100.npz",
     )
 
-    input_energies, input_tts, input_sigmas, input_gammas = tar_xz_to_input_arrays(
-        tar_path=DIR / AND_COMP_DIR / "data_anderson_L200.tar.xz",
+    # L = 200
+    save_input_arrays(
+        tar_path=AND_COMP_DIR / "data_anderson_L200.tar.xz",
+        array_path=AND_ARRAY_DIR / "data_anderson_L200.npz",
     )
-    np.savez_compressed(
-        file=AND_ARRAY_DIR / "data_anderson_L200.npz",
-        energies=input_energies[0, 0, :],
-        tts=input_tts,
-        sigmas=input_sigmas,
-        gammas=input_gammas,
+    save_ca_arrays(
+        zip_path=AND_COMP_DIR / "data_anderson_ca_L200_gamma015.tar.xz",
+        array_path=AND_ARRAY_DIR / "data_anderson_ca_L200_gamma015.npz",
+        copy_from_jobid=True,
     )
-
-    ca_energies, ca_tts, ca_sigmas, ca_gammas = compressed_to_ca_arrays(
-        zip_path=DIR / AND_COMP_DIR / "data_anderson_ca_L200_gamma015.tar.xz",
-        clean_jobid=True,
-    )
-    np.savez_compressed(
-        file=AND_ARRAY_DIR / "data_anderson_ca_L200_gamma015.npz",
-        energies=ca_energies[0, 0, :, 0],
-        tts=ca_tts,
-        sigmas=ca_sigmas[:, 0],
-        gammas=ca_gammas[0, :],
-    )
-
-    ca_energies, ca_tts, ca_sigmas, ca_gammas = compressed_to_ca_arrays(
-        zip_path=DIR / AND_COMP_DIR / "data_anderson_ca_L200_W050.tar.xz",
-        clean_jobid=True,
-    )
-    np.savez_compressed(
-        file=AND_ARRAY_DIR / "data_anderson_ca_L200_W050.npz",
-        energies=ca_energies[0, 0, :, 0],
-        tts=ca_tts,
-        sigmas=ca_sigmas[:, 0],
-        gammas=ca_gammas[0, :],
+    save_ca_arrays(
+        zip_path=AND_COMP_DIR / "data_anderson_ca_L200_W050.tar.xz",
+        array_path=AND_ARRAY_DIR / "data_anderson_ca_L200_W050.npz",
+        copy_from_jobid=True,
     )

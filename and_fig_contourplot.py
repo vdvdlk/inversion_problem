@@ -4,19 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
-from mod_analysis import chi_array, load_arrays
-from mod_plotting import countour_plot, separate_inset_plots
-
-plt.rcParams.update(
-    {
-        "text.usetex": True,
-        # "font.family": "Helvetica",
-        "font.family": "serif",
-        "font.serif": ["Computer Modern Roman"],
-        "text.latex.preamble": r"\usepackage{amsmath}",
-    }
-)
-
+from analysis.arrays import load_arrays
+from analysis.misfit_function import misfit_function
+from analysis.plotting import countour_plot, separate_inset_plots
 
 DIR = Path(__file__).parent
 ARRAY_DIR = DIR / "arrays" / "anderson"
@@ -45,7 +35,7 @@ for interval in intervals:
     energy_dir = FIG_DIR / f"{e_menos:.1f}<E<{e_mais:.1f}"
     energy_dir.mkdir(parents=True, exist_ok=True)
 
-    chis = chi_array(
+    chis = misfit_function(
         energies=ENERGIES,
         input_gamma=INPUT_LOGTT[np.newaxis, np.newaxis, :, :, :],
         ca_gamma=CA_LOGTT[:, :, np.newaxis, np.newaxis, :],
@@ -176,5 +166,5 @@ for interval in intervals:
         bbox_inches="tight",
     )
 
-    # plt.show()
+    plt.show()
     plt.close("all")

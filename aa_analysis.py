@@ -1,12 +1,11 @@
 from pathlib import Path
 
-import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
-from mod_analysis import chi_array
-from mod_plotting import chi_plot
+from analysis.arrays import chi_array
+from analysis.plotting import chi_plot
 
 plt.rcParams.update(
     {
@@ -17,11 +16,6 @@ plt.rcParams.update(
         "text.latex.preamble": r"\usepackage{amsmath}",
     }
 )
-
-white_on_black_args = [
-    path_effects.Stroke(linewidth=2, foreground="black"),
-    path_effects.Normal(),
-]
 
 if __name__ == "__main__":
     DIR = Path(__file__).parent

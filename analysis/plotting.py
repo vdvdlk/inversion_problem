@@ -9,6 +9,14 @@ white_on_black_args = [
     path_effects.Normal(),
 ]
 
+rc_params_dict = {
+    "text.usetex": True,
+    # "font.family": "Helvetica",
+    "font.family": "serif",
+    "font.serif": ["Computer Modern Roman"],
+    "text.latex.preamble": r"\usepackage{amsmath}",
+}
+
 ## Anderson ###################################################################
 
 

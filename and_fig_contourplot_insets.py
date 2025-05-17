@@ -3,8 +3,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mod_analysis import chi_array, load_arrays
-from mod_plotting import (
+from analysis.misfit_function import load_arrays, misfit_function
+from analysis.plotting import (
     countour_plot,
     inset_plots,
 )
@@ -49,7 +49,7 @@ for interval in intervals:
     energy_dir = FIG_DIR / f"{e_menos:.1f}<E<{e_mais:.1f}"
     energy_dir.mkdir(parents=True, exist_ok=True)
 
-    chis = chi_array(
+    chis = misfit_function(
         energies=ENERGIES,
         input_gamma=INPUT_LOGTT[np.newaxis, np.newaxis, :, :, :],
         ca_gamma=CA_LOGTT[:, :, np.newaxis, np.newaxis, :],

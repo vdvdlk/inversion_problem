@@ -16,7 +16,7 @@ def parse_val(v):
         return v
 
 
-def read_variables(
+def read_aa_variables(
     dados_dat_path: Path,
 ) -> dict[str, float]:
     with open(dados_dat_path, "r") as f:
@@ -74,7 +74,7 @@ def read_job_dir(
         raise RuntimeError(
             f"Esperado apenas um arquivo 'dados*' no diretório, mas {len(dados_files)} foram encontrados: {dados_files}"
         )
-    variables = read_variables(dados_files[0])
+    variables = read_aa_variables(dados_files[0])
 
     logtt_files = list(job_dir.glob("logTT*.dat"))
     if len(logtt_files) == 0:
@@ -120,7 +120,7 @@ def bare_data_to_array(
     return np.stack(split_arrays, axis=0)
 
 
-def zip_to_ca_arrays(
+def compressed_to_ca_arrays(
     zip_path: Path,
 ):
     """Converts a zip file to an array"""
@@ -194,6 +194,25 @@ def zip_to_ca_arrays(
     return energies, logtts, sdom_logtts, g_aa_s, gammas
 
 
+def save_ca_arrays(
+    zip_path: Path,
+    array_path: Path,
+):
+    energies, logtts, sdom_logtts, g_aa_s, gammas = compressed_to_ca_arrays(
+        zip_path=zip_path,
+    )
+    print("Salvando array")
+    np.savez_compressed(
+        file=array_path,
+        energies=energies[0, 0, :],
+        logtts=logtts,
+        sdom_logtts=sdom_logtts,
+        g_aa_s=g_aa_s,
+        gammas=gammas,
+    )
+    print(f"Array salvo em {array_path}\n")
+
+
 def organize_versions(data_dir: Path):
     """Move diretórios *vNNN para dentro de um diretório de mesmo prefixo."""
     desc = "Organizando versões"
@@ -243,7 +262,7 @@ def clean_jobid_dir(v_dir: Path):
         # shutil.rmtree(jobid_dir)
 
 
-def tar_xz_to_input_arrays(
+def compressed_to_input_arrays(
     tar_path: Path,
 ):
     """Converts a zip file to an array"""
@@ -307,6 +326,24 @@ def tar_xz_to_input_arrays(
     return energies, tts, g_aa_s, gammas
 
 
+def save_input_arrays(
+    tar_path: Path,
+    array_path: Path,
+):
+    energies, logtts, g_aa_s, gammas = compressed_to_input_arrays(
+        tar_path=tar_path,
+    )
+    print("Salvando array")
+    np.savez_compressed(
+        file=array_path,
+        energies=energies[0, 0, :],
+        logtts=logtts,
+        g_aa_s=g_aa_s,
+        gammas=gammas,
+    )
+    print(f"Array salvo em {array_path}\n")
+
+
 if __name__ == "__main__":
     DIR = Path(__file__).parent
 
@@ -314,29 +351,12 @@ if __name__ == "__main__":
     AA_ARRAY_DIR = DIR / "arrays" / "aubry_andre"
     AA_ARRAY_DIR.mkdir(exist_ok=True, parents=True)
 
-    CA_DATA_PATH = DIR / AA_COMP_DIR / "AA_results.zip"
-    ca_energies, ca_logtts, ca_sdom_logtts, ca_g_aa_s, ca_gammas = zip_to_ca_arrays(
-        zip_path=CA_DATA_PATH,
-    )
-    # print(f"{ca_energies.shape=}")
-    np.savez_compressed(
-        file=AA_ARRAY_DIR / "AA_results.npz",
-        energies=ca_energies[0, 0, :],
-        logtts=ca_logtts,
-        sdom_logtts=ca_sdom_logtts,
-        g_aa_s=ca_g_aa_s,
-        gammas=ca_gammas,
+    save_ca_arrays(
+        zip_path=AA_COMP_DIR / "AA_results.zip",
+        array_path=AA_ARRAY_DIR / "AA_results.npz",
     )
 
-    INPUT_DATA_PATH = DIR / AA_COMP_DIR / "data_aah.tar.xz"
-    input_energies, input_logtts, input_sigmas, input_gammas = tar_xz_to_input_arrays(
-        tar_path=INPUT_DATA_PATH,
-    )
-    # print(f"{input_energies.shape=}")
-    np.savez_compressed(
-        file=AA_ARRAY_DIR / "data_aah.npz",
-        energies=input_energies[0, 0, :],
-        logtts=input_logtts,
-        g_aa_s=input_sigmas,
-        gammas=input_gammas,
+    save_input_arrays(
+        tar_path=AA_COMP_DIR / "data_aah.tar.xz",
+        array_path=AA_ARRAY_DIR / "data_aah.npz",
     )
