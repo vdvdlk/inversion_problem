@@ -1,10 +1,13 @@
 #!/bin/bash
 
 # Compilador
-FC="ifort"
+#FC="ifort"
+FC="ifx"
+
 # Opções de compilação
-# FFLAGS="-diag-disable=10448 -O2 -warn all -qmkl"
-FFLAGS="-diag-disable=10448 -O2 -qmkl"
+#FFLAGS="-diag-disable=10448 -O2 -warn all -qmkl"
+#FFLAGS="-diag-disable=10448 -O2 -qmkl -qopt-report=5"
+FFLAGS="-O2 -qmkl -qopt-report=3"
 
 source /opt/intel/oneapi/setvars.sh
 
